@@ -253,7 +253,7 @@
                     })
                     .filter(name => !excludedColumns.includes(name));
 
-                const visibleColumns = columnNames.filter(name => defaultVisibleColumns.includes(name));
+                const visibleColumns = columnNames.filter(name => defaultVisibleColumns.includes(name)); 
 
                 const dataRows = Array.from(rows)
                     .slice(headerRowIndex + 1)
