@@ -177,7 +177,8 @@
                 'EAL': 'EAL',
                 'SEN Status': 'SEN',
                 'Pupil Premium Indicator': 'Premium',
-                'Current Reading Age Reading Age': 'Reading'
+                'Current Reading Age Reading Age': 'Reading',
+                'Group Name': 'Group'
             };
 
             const defaultVisibleColumns = [
@@ -185,7 +186,8 @@
                 'EAL',
                 'SEN Status',
                 'Pupil Premium Indicator',
-                'Current Reading Age Reading Age'
+                'Current Reading Age Reading Age',
+                'Group Name'
             ];
 
             const excludedColumns = ['Template Notes', 'Marksheet Name'];
@@ -251,6 +253,8 @@
                     })
                     .filter(name => !excludedColumns.includes(name));
 
+                const visibleColumns = columnNames.filter(name => defaultVisibleColumns.includes(name));
+
                 const dataRows = Array.from(rows)
                     .slice(headerRowIndex + 1)
                     .map(row => {
@@ -274,7 +278,7 @@
                     fileName,
                     columns: columnNames,
                     data: dataRows,
-                    visibleColumns: defaultVisibleColumns.filter(col => columnNames.includes(col))
+                    visibleColumns: visibleColumns // Default only specific columns visible
                 };
             };
 
@@ -319,6 +323,24 @@
                 setFilesData((prevFilesData) => {
                     const updatedFilesData = [...prevFilesData];
                     updatedFilesData[fileIndex].data[rowIndex][cellIndex] = newValue;
+                    return updatedFilesData;
+                });
+            };
+
+            const handleHeaderChange = (e, fileIndex, columnIndex) => {
+                const newValue = e.target.value;
+                setFilesData((prevFilesData) => {
+                    const updatedFilesData = [...prevFilesData];
+
+                    // Update the column name in the file data
+                    const oldValue = updatedFilesData[fileIndex].columns[columnIndex];
+                    updatedFilesData[fileIndex].columns[columnIndex] = newValue;
+
+                    // Update the visibleColumns with the new value to maintain visibility
+                    updatedFilesData[fileIndex].visibleColumns = updatedFilesData[fileIndex].visibleColumns.map(col =>
+                        col === oldValue ? newValue : col
+                    );
+
                     return updatedFilesData;
                 });
             };
@@ -433,7 +455,15 @@
                                                     {fileData.columns.map((column, index) => (
                                                         fileData.visibleColumns.includes(column) && (
                                                             <th key={index} title={column}>
-                                                                {getDisplayName(column)}
+                                                                {editMode ? (
+                                                                    <input
+                                                                        type="text"
+                                                                        value={column}
+                                                                        onChange={(e) => handleHeaderChange(e, fileIndex, index)}
+                                                                    />
+                                                                ) : (
+                                                                    getDisplayName(column)
+                                                                )}
                                                             </th>
                                                         )
                                                     ))}
