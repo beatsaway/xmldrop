@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Multi-file XML Table Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 10px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        .drag-area {
+            border: 1px dashed #ccc;
+            border-radius: 4px;
+            padding: 10px;
+            text-align: center;
+            margin: 0 0 10px 0;
+            background-color: #f8f9fa;
+        }
+
+        .drag-active {
+            border-color: #007bff;
+            background-color: #e3f2fd;
+        }
+
+        .column-toggles {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin: 8px 0;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            font-size: 9px;
+            animation: fadeIn 0.2s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .toggle-item {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            background-color: white;
+            padding: 2px 5px;
+            border-radius: 3px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .file-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 3px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn-remove {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            table-layout: auto;
+            margin-bottom: 20px;
+        }
+
+        .data-table th, .data-table td {
+            padding: 4px 8px;
+            border: 1px solid #dee2e6;
+            white-space: nowrap;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .data-table th {
+            background-color: #f8f9fa;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            text-align: left;
+        }
+
+        .table-container {
+            overflow-x: auto; /* Keep horizontal scroll if needed */
+            /* Removed max-height to allow auto height */
+            border: 0px solid #dee2e6;
+            border-radius: 0px;
+            position: relative; /* Needed for popup positioning */
+            padding: 0px;
+            background-color: #fff;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 20px; /* Ensure space between tables */
+        }
+
+        .error-message {
+            color: #dc3545;
+            padding: 8px;
+            margin: 0 0 10px 0;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        input[type="checkbox"] {
+
+            margin: 0;
+        }
+
+        .icon {
+            width: 12px;
+            height: 12px;
+        }
+
+        /* Added styles */
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        /* Popup styles */
+        .popup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .popup-content {
+            background-color: white;
+            width: 70vw;
+            max-width: 600px;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            position: relative;
+        }
+
+        .popup-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        /* Adjust file-wrapper to behave like inline-block */
+        .file-wrapper {
+            display: inline-block;
+            vertical-align: top;
+            margin:5px;
+            
+            box-sizing: border-box;
+            /* Removed any height restrictions */
+        }
+
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+function SettingsIcon() {
+    return (
+        <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" />
+            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
+        </svg>
+    );
+}
+
+function App() {
+    const [filesData, setFilesData] = React.useState([]);
+    const [isDragging, setIsDragging] = React.useState(false);
+    const [error, setError] = React.useState(null);
+    const [popupData, setPopupData] = React.useState(null); // { fileData }
+
+    const fileInputRef = React.useRef(null);
+
+    const headerMapping = {
+        'Surname Forename': 'Name',
+        'EAL': 'EAL',
+        'SEN Status': 'SEN',
+        'Pupil Premium Indicator': 'Premium',
+        'Current Reading Age Reading Age': 'Reading'
+    };
+
+    const defaultVisibleColumns = [
+        'Surname Forename',
+        'EAL',
+        'SEN Status',
+        'Pupil Premium Indicator',
+        'Current Reading Age Reading Age'
+    ];
+
+    const excludedColumns = ['Template Notes', 'Marksheet Name'];
+    const excludedRowStartsWith = ['Marksheet Name', '     Template Notes:'];
+
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        setIsDragging(false);
+    };
+
+    const parseXMLData = (xmlDoc, fileName) => {
+        const rows = xmlDoc.getElementsByTagName('Row');
+        let headerRowIndex = -1;
+        
+        for (let i = 0; i < rows.length; i++) {
+            const firstCell = rows[i].getElementsByTagName('Cell')[0];
+            const firstData = firstCell?.getElementsByTagName('Data')[0]?.textContent;
+            
+            if (!excludedRowStartsWith.some(prefix => firstData?.startsWith(prefix))) {
+                headerRowIndex = i;
+                break;
+            }
+        }
+
+        if (headerRowIndex === -1) return null;
+
+        const headerRow = rows[headerRowIndex];
+        const headerCells = headerRow.getElementsByTagName('Cell');
+        
+        const columnNames = Array.from(headerCells)
+            .map(cell => {
+                const data = cell.getElementsByTagName('Data')[0];
+                return data ? data.textContent : '';
+            })
+            .filter(name => !excludedColumns.includes(name));
+        
+        const dataRows = Array.from(rows)
+            .slice(headerRowIndex + 1)
+            .map(row => {
+                const cells = row.getElementsByTagName('Cell');
+                const firstCellContent = cells[0]?.getElementsByTagName('Data')[0]?.textContent;
+                
+                if (excludedRowStartsWith.some(prefix => firstCellContent?.startsWith(prefix))) {
+                    return null;
+                }
+
+                return Array.from(cells)
+                    .map(cell => {
+                        const data = cell.getElementsByTagName('Data')[0];
+                        return data ? data.textContent : '';
+                    })
+                    .filter((_, index) => !excludedColumns.includes(columnNames[index]));
+            })
+            .filter(row => row !== null);
+
+        return {
+            fileName,
+            columns: columnNames,
+            data: dataRows,
+            visibleColumns: defaultVisibleColumns.filter(col => columnNames.includes(col))
+        };
+    };
+
+    const handleDrop = async (e) => {
+        e.preventDefault();
+        setIsDragging(false);
+        setError(null);
+
+        const files = Array.from(e.dataTransfer.files);
+        
+        for (const file of files) {
+            try {
+                const content = await file.text();
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(content, "text/xml");
+                const parsedData = parseXMLData(xmlDoc, file.name);
+                
+                if (parsedData) {
+                    setFilesData(prev => [...prev, parsedData]);
+                }
+            } catch (err) {
+                setError(`Error parsing file ${file.name}: ${err.message}`);
+                console.error(err);
+            }
+        }
+    };
+
+    const removeFile = (fileName) => {
+        setFilesData(prev => prev.filter(file => file.fileName !== fileName));
+    };
+
+    const toggleColumn = (fileName, columnName) => {
+        setFilesData(prev => {
+            const updatedFilesData = prev.map(file => 
+                file.fileName === fileName
+                    ? {
+                        ...file,
+                        visibleColumns: file.visibleColumns.includes(columnName)
+                            ? file.visibleColumns.filter(col => col !== columnName)
+                            : [...file.visibleColumns, columnName]
+                    }
+                    : file
+            );
+
+            if (popupData && popupData.fileName === fileName) {
+                setPopupData(updatedFilesData.find(file => file.fileName === fileName));
+            }
+
+            return updatedFilesData;
+        });
+    };
+
+
+    const getDisplayName = (columnName) => {
+        return headerMapping[columnName] || columnName;
+    };
+
+    // Function to save JSON
+    const handleSaveJSON = () => {
+        const dataStr = JSON.stringify(filesData, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'filesData.json';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    // Function to load JSON
+    const handleLoadJSON = () => {
+        fileInputRef.current.click();
+    };
+
+    const handleFileInputChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const loadedData = JSON.parse(event.target.result);
+                    setFilesData(loadedData);
+                    setError(null);
+                } catch (err) {
+                    setError(`Error parsing JSON file: ${err.message}`);
+                }
+            };
+            reader.readAsText(file);
+        }
+        e.target.value = null;
+    };
+
+    const handleContextMenu = (e, fileData) => {
+        e.preventDefault();
+        setPopupData(fileData);
+    };
+
+    const closePopup = () => {
+        setPopupData(null);
+    };
+
+    // Close popup on clicking outside or pressing Escape
+    React.useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (popupData) {
+                closePopup();
+            }
+        };
+
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                closePopup();
+            }
+        };
+
+        if (popupData) {
+            document.addEventListener('click', handleClickOutside);
+            document.addEventListener('keydown', handleEscape);
+        }
+
+        return () => {
+            document.removeEventListener('click', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
+        };
+    }, [popupData]);
+
+    return (
+        <div>
+            <div className="toolbar">
+                <button className="btn" onClick={handleSaveJSON}>Save JSON</button>
+                <button className="btn" onClick={handleLoadJSON}>Load JSON</button>
+                <input
+                    type="file"
+                    accept="application/json"
+                    style={{ display: 'none' }}
+                    ref={fileInputRef}
+                    onChange={handleFileInputChange}
+                />
+            </div>
+
+            <div 
+                className={`drag-area ${isDragging ? 'drag-active' : ''}`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+            >
+                <h2>Drag and Drop XML Files Here</h2>
+                <p>You can drop multiple XML files containing table data</p>
+            </div>
+
+            {error && (
+                <div className="error-message">
+                    {error}
+                </div>
+            )}
+
+            <div className="tables-container">
+                {filesData.map((fileData, fileIndex) => (
+                    <span key={fileIndex} className="file-wrapper">
+                        {fileData.visibleColumns.length > 0 && (
+                            <div 
+                                className="table-container"
+                                onContextMenu={(e) => handleContextMenu(e, fileData)}
+                            >
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            {fileData.columns.map((column, index) => (
+                                                fileData.visibleColumns.includes(column) && (
+                                                    <th key={index} title={column}>
+                                                        {getDisplayName(column)}
+                                                    </th>
+                                                )
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {fileData.data.map((row, rowIndex) => (
+                                            <tr key={rowIndex}>
+                                                {row.map((cell, cellIndex) => (
+                                                    fileData.visibleColumns.includes(fileData.columns[cellIndex]) && (
+                                                        <td key={cellIndex}>{cell}</td>
+                                                    )
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </span>
+                ))}
+            </div>
+
+            {popupData && (
+                <div className="popup-overlay" onClick={closePopup}>
+                    <div 
+                        className="popup-content"
+                        onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+                    >
+                        <button className="popup-close" onClick={closePopup}>&times;</button>
+                        <div className="column-toggles">
+                            {popupData.columns.map((column, index) => (
+                                <label key={index} className="toggle-item" title={column}>
+                                    <input
+                                        type="checkbox"
+                                        checked={popupData.visibleColumns.includes(column)}
+                                        onChange={() => toggleColumn(popupData.fileName, column)}
+                                    />
+                                    {getDisplayName(column)}
+                                </label>
+                            ))}
+                        </div>
+                        <button 
+                            className="btn btn-remove"
+                            onClick={() => {
+                                removeFile(popupData.fileName);
+                                closePopup();
+                            }}
+                            style={{ marginTop: '10px' }}
+                        >
+                            Remove File
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
